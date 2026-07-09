@@ -262,21 +262,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   .chart-grid .span2 { grid-column: span 1; }
 }
 
-.danger-card {
-  border-color: color-mix(in srgb, var(--status-crit) 50%, var(--border));
-  background: color-mix(in srgb, var(--status-crit) 7%, var(--surface));
-}
-.danger-head { display: flex; align-items: center; gap: 14px; }
-.danger-icon { font-size: 26px; color: var(--crit-text); }
-.danger-head h3 { font-size: 14px; }
-.danger-num {
-  margin-left: auto; font-size: 38px; font-weight: 750; color: var(--crit-text);
-  display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; flex: none;
-}
-.danger-num .danger-sub { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-.danger-breakdown { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2); }
-.danger-breakdown b { color: var(--text); font-variant-numeric: tabular-nums; }
-
 /* ============ Lifecycle ============ */
 .lifecycle-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .badge {
