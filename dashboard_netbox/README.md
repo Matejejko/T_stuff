@@ -20,10 +20,10 @@ devices + 2 deliberately malformed rows) generated for testing.
 ## What it does
 
 - **Upload & parse** — drag-and-drop or file picker; header validated against
-  the 65-column NetBox device export schema. Missing/extra/reordered columns
-  produce warnings, not crashes (columns are matched by name). Rows with a
-  wrong field count are kept, counted as empty where short, and listed in the
-  "malformed rows" panel.
+  the 65-column NetBox device export schema. Missing/extra columns produce
+  warnings, not crashes; column order is ignored entirely (columns are matched
+  by name). Rows with a wrong field count are kept, counted as empty where
+  short, and listed in the "malformed rows" panel.
 - **Weighted completeness scoring** — per device: Σ weights of non-empty
   tiered fields ÷ Σ weights of all tiered fields. Defaults: 14 critical
   fields × weight 3, 11 important × weight 1, everything else ignored.
@@ -40,12 +40,13 @@ devices + 2 deliberately malformed rows) generated for testing.
   `G1`/`Gen 3`/`Gen3` token; non-matches land in "Unspecified", never guessed.
   Site/rack density top-10.
 - **Completeness charts** — per-field fill rate (worst first), per-device
-  score histogram, averages by site and role, and a dedicated callout for
-  **Active devices missing BMC IP or OOB IP** (no out-of-band path to live gear).
-- **Lifecycle / risk** — past-EOL and 90/180-day EOL windows, device age from
-  Installation Date, and FW-bundle presence on active devices. Each card shows
-  field-population badges and states explicitly when a field is empty
-  fleet-wide instead of rendering a misleading empty chart.
+  score histogram, and averages by site and role. BMC IP / OOB IP coverage is
+  shown as small fill-rate badges in the section title; the **Missing OOB
+  only** toggle in the device table lists active devices without either IP.
+- **Lifecycle / risk** — past-EOL and 90/180-day EOL windows and FW-bundle
+  presence on active devices. Each card shows field-population badges and
+  states explicitly when a field is empty fleet-wide instead of rendering a
+  misleading empty chart.
 - **Filters** — Site, Region, Criticality, Status, Role, Manufacturer,
   Generation, Tenant; every chart, KPI, and the table respect the same filter
   set. Debounced; handles a few thousand rows comfortably.

@@ -8,14 +8,14 @@
 
 const EXPECTED_COLUMNS = [
   'Asset Name','Name','Serial number','Criticality','Status','Tenant','Role','Manufacturer','Type',
-  'BMC IP','BMC MAC','BMC Version','BIOS Version','Asset tag','ID','Tenant Group','Region','Site Group',
-  'Site','Location','Rack','Parent Device','Position (Device Bay)','Position','Rack face','Latitude',
-  'Longitude','Airflow','IP Address','IPv4 Address','IPv6 Address','OOB IP','Cluster','Virtual Chassis',
-  'VC Position','VC Priority','Description','Config Template','Comments','Contacts','Tags','Created',
-  'Last updated','Owner Group','Owner','U Height','Platform','Console ports','Console server ports',
-  'Power ports','Power outlets','Interfaces','Front ports','Rear ports','Device bays','Module bays',
-  'Inventory items','BIOS Date','EOL','FW Bundle','Installation Date','Last updated (automatic)',
-  'OS Info','Product Name','UUID'
+  'BMC IP','BMC MAC','BMC Version','BIOS Version','Asset tag','FW Bundle','BIOS Date','ID',
+  'Tenant Group','Region','Site Group','Site','Location','Rack','Parent Device','Position (Device Bay)',
+  'Position','Rack face','Latitude','Longitude','Airflow','IP Address','IPv4 Address','IPv6 Address',
+  'OOB IP','Cluster','Virtual Chassis','VC Position','VC Priority','Description','Config Template',
+  'Comments','Contacts','Tags','Created','Last updated','Owner Group','Owner','U Height','Platform',
+  'Console ports','Console server ports','Power ports','Power outlets','Interfaces','Front ports',
+  'Rear ports','Device bays','Module bays','Inventory items','EOL','Installation Date',
+  'Last updated (automatic)','OS Info','Product Name','UUID'
 ];
 
 const DEFAULT_CRITICAL = [
@@ -87,7 +87,7 @@ const state = {
   fileName: null,
   rows: [],
   fields: [],
-  headerIssues: { missing: [], extra: [], reordered: false },
+  headerIssues: { missing: [], extra: [] },
   parseErrors: [],
   settings: defaultSettings(),
   scoreDenominator: 0,
@@ -216,9 +216,7 @@ function ingest(res, name) {
 
   const missing = EXPECTED_COLUMNS.filter(c => !state.fields.includes(c));
   const extra = state.fields.filter(c => !EXPECTED_COLUMNS.includes(c));
-  const reordered = !missing.length && !extra.length &&
-    state.fields.join('') !== EXPECTED_COLUMNS.join('');
-  state.headerIssues = { missing, extra, reordered };
+  state.headerIssues = { missing, extra };
 
   // extra columns become adjustable tiers too (default: ignored)
   for (const c of extra) if (!(c in state.settings.tiers)) state.settings.tiers[c] = 'ignored';
@@ -277,7 +275,6 @@ function computeDerived() {
     r._completeness = (r._excluded || denom === 0) ? null : (got / denom) * 100;
     r._oobGap = r._active && ((hasBMC && isEmptyVal(r['BMC IP'])) || (hasOOB && isEmptyVal(r['OOB IP'])));
     r._eol = parseDateSmart(r['EOL']);
-    r._install = parseDateSmart(r['Installation Date']);
     r._fw = !isEmptyVal(r['FW Bundle']);
   }
 }
@@ -412,7 +409,7 @@ function renderAll() {
   renderKPIs();
   renderComposition();
   renderDensity();
-  renderOobCallout();
+  renderCompletenessBadges();
   renderCompletenessCharts();
   renderLifecycle();
   renderTableFull();
@@ -433,7 +430,6 @@ function renderKPIs() {
   const excluded = rows.length - scored.length;
   const avg = scored.length ? scored.reduce((s, r) => s + r._completeness, 0) / scored.length : null;
   const active = rows.filter(r => r._active);
-  const oobGap = rows.filter(r => r._oobGap);
   const t = todayUTC();
   const eolDated = rows.filter(r => r._eol.kind === 'date');
   const pastEol = eolDated.filter(r => r._eol.date.getTime() < t);
@@ -457,9 +453,6 @@ function renderKPIs() {
     kpi('Empty critical fields', fmtInt(critMiss.length),
       scored.length ? `${fmtPct(critMiss.length / scored.length * 100)} of ${fmtInt(scored.length)} scored devices flagged` : 'no scored devices',
       critMiss.length ? 'kpi-danger' : '') +
-    kpi('Active w/o BMC or OOB IP', fmtInt(oobGap.length),
-      active.length ? `${fmtPct(oobGap.length / active.length * 100)} of ${fmtInt(active.length)} active` : 'no active devices',
-      oobGap.length ? 'kpi-danger' : '') +
     kpi('Past EOL', fmtInt(pastEol.length),
       `EOL populated on ${fmtPct(eolPop)} of devices`, '', pastEol.length ? 'tone-crit' : '') +
     kpi('Active w/o FW bundle', fmtInt(fwGap.length),
@@ -530,21 +523,17 @@ function renderDensity() {
   });
 }
 
-/* ---------- OOB callout ---------- */
-function renderOobCallout() {
-  const active = state.filtered.filter(r => r._active);
-  const gap = active.filter(r => r._oobGap);
-  const both = gap.filter(r => isEmptyVal(r['BMC IP']) && isEmptyVal(r['OOB IP'])).length;
-  const bmcOnly = gap.filter(r => isEmptyVal(r['BMC IP']) && !isEmptyVal(r['OOB IP'])).length;
-  const oobOnly = gap.filter(r => !isEmptyVal(r['BMC IP']) && isEmptyVal(r['OOB IP'])).length;
-  $('#oobNumber').innerHTML =
-    `${fmtInt(gap.length)}${active.length ? `<span class="danger-sub">${fmtPct(gap.length / active.length * 100)} of active</span>` : ''}`;
-  $('#oobBreakdown').innerHTML = gap.length
-    ? `<span>Missing both: <b>${fmtInt(both)}</b></span>
-       <span>BMC IP only: <b>${fmtInt(bmcOnly)}</b></span>
-       <span>OOB IP only: <b>${fmtInt(oobOnly)}</b></span>
-       <span class="muted">Use the &ldquo;Missing OOB only&rdquo; toggle in the device table to list them.</span>`
-    : `<span>${active.length ? 'Every active device in the current filter has out-of-band access recorded. ✓' : 'No active devices in the current filter.'}</span>`;
+/* ---------- Out-of-band badges (small fill-rate indicators) ---------- */
+function renderCompletenessBadges() {
+  const rows = state.filtered;
+  const n = rows.length || 1;
+  $('#completenessBadges').innerHTML = ['BMC IP', 'OOB IP'].map(col => {
+    let filled = 0;
+    for (const r of rows) if (!isEmptyVal(r[col])) filled++;
+    const p = filled / n * 100;
+    const cls = p < 5 ? 'b-crit' : p < 50 ? 'b-warn' : '';
+    return `<span class="badge ${cls}" title="Use the &ldquo;Missing OOB only&rdquo; toggle in the device table to list active devices without BMC/OOB IP">${col}: ${fmtPct(p)} populated</span>`;
+  }).join('');
 }
 
 /* ---------- Completeness charts ---------- */
@@ -664,37 +653,6 @@ function renderLifecycle() {
     });
   }
 
-  // Age distribution
-  const age = { y1: 0, y3: 0, y5: 0, y5p: 0, unparseable: 0, empty: 0 };
-  for (const r of rows) {
-    const e = r._install;
-    if (e.kind === 'empty') age.empty++;
-    else if (e.kind !== 'date') age.unparseable++;
-    else {
-      const yrs = (t - e.date.getTime()) / DAY / 365.25;
-      if (yrs < 1) age.y1++;
-      else if (yrs < 3) age.y3++;
-      else if (yrs < 5) age.y5++;
-      else age.y5p++;
-    }
-  }
-  const ageHasDates = (age.y1 + age.y3 + age.y5 + age.y5p + age.unparseable) > 0;
-  $('#ageEmpty').classList.toggle('hidden', ageHasDates);
-  $('#ageBox').classList.toggle('hidden', !ageHasDates);
-  if (!ageHasDates) {
-    $('#ageEmpty').textContent =
-      `Installation Date is empty on all ${fmtInt(rows.length)} devices in the current filter — age cannot be derived.`;
-  } else {
-    upsertBar('chAge', {
-      horizontal: false,
-      labels: ['<1 yr', '1–3 yr', '3–5 yr', '5+ yr', 'Unparseable', 'No date'],
-      values: [age.y1, age.y3, age.y5, age.y5p, age.unparseable, age.empty],
-      colors: [cssVar('--ord-1'), cssVar('--ord-2'), cssVar('--ord-3'), cssVar('--ord-4'),
-               cssVar('--muted'), cssVar('--surface-3')],
-      tooltip: ctx => ` ${fmtInt(ctx.parsed.y)} devices (${fmtPct(ctx.parsed.y / n * 100)})`,
-    });
-  }
-
   // FW bundle
   const active = rows.filter(r => r._active);
   const activeNoFw = active.filter(r => !r._fw).length;
@@ -713,9 +671,9 @@ function renderLifecycle() {
 
 /* ---------- Data health (schema + parse errors) ---------- */
 function renderDataHealth() {
-  const { missing, extra, reordered } = state.headerIssues;
+  const { missing, extra } = state.headerIssues;
   const tieredMissing = missing.filter(c => state.settings.tiers[c] !== 'ignored');
-  const issues = (missing.length ? 1 : 0) + (extra.length ? 1 : 0) + (reordered ? 1 : 0);
+  const issues = (missing.length ? 1 : 0) + (extra.length ? 1 : 0);
   const errs = state.parseErrors.length;
   const el = $('#dataHealth');
   if (!issues && !errs) { el.classList.add('hidden'); return; }
@@ -729,8 +687,6 @@ function renderDataHealth() {
     ${tieredMissing.length ? `<p>These are tiered fields — they are excluded from the completeness score while absent: ${tieredMissing.map(c => `<code>${esc(c)}</code>`).join(' ')}</p>` : ''}</div>`;
   if (extra.length) hw += `<div class="issue-block"><h4>Unexpected extra columns (${extra.length})</h4>
     <p>${extra.map(c => `<code>${esc(c)}</code>`).join(' ')} — defaulted to the <em>ignored</em> tier; reclassify in Settings if they should count.</p></div>`;
-  if (reordered) hw += `<div class="issue-block"><h4>Column order differs from the standard export</h4>
-    <p>Columns are matched by name, so this is handled automatically.</p></div>`;
   $('#headerWarnings').innerHTML = hw;
 
   $('#parseErrors').innerHTML = errs ? `<div class="issue-block">
