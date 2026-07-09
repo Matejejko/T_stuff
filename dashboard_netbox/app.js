@@ -61,6 +61,7 @@ const TABLE_COLS = [
   { key: 'Status',        label: 'Status' },
   { key: 'Criticality',   label: 'Criticality' },
   { key: '_gen',          label: 'Gen', title: 'Generation (parsed from Type)' },
+  { key: '_missing',      label: 'Missing', title: 'Empty critical / important fields (ignored fields are not counted)' },
   { key: '_completeness', label: 'Completeness' },
 ];
 const SEARCH_FIELDS = ['Asset Name','Name','Serial number','Site','Rack','Role','Manufacturer','Type','Status','Asset tag'];
@@ -438,6 +439,7 @@ function renderKPIs() {
   const pastEol = eolDated.filter(r => r._eol.date.getTime() < t);
   const eolPop = rows.length ? eolDated.length / rows.length * 100 : 0;
   const fwGap = active.filter(r => !r._fw);
+  const critMiss = scored.filter(r => r._missingCritical.length);
 
   const kpi = (label, value, sub, cls = '', vcls = '') => `
     <div class="kpi ${cls}">
@@ -452,6 +454,9 @@ function renderKPIs() {
     kpi('Avg completeness', fmtPct(avg),
       scored.length ? `weighted · ${fmtInt(scored.length)} scored${excluded ? ` · ${fmtInt(excluded)} excluded by status` : ''}` : 'no scored devices',
       '', avg != null ? 'tone-' + completenessTone(avg) : '') +
+    kpi('Empty critical fields', fmtInt(critMiss.length),
+      scored.length ? `${fmtPct(critMiss.length / scored.length * 100)} of ${fmtInt(scored.length)} scored devices flagged` : 'no scored devices',
+      critMiss.length ? 'kpi-danger' : '') +
     kpi('Active w/o BMC or OOB IP', fmtInt(oobGap.length),
       active.length ? `${fmtPct(oobGap.length / active.length * 100)} of ${fmtInt(active.length)} active` : 'no active devices',
       oobGap.length ? 'kpi-danger' : '') +
@@ -753,6 +758,12 @@ function computeTableRows() {
       if (bv == null) return -1;
       return (av - bv) * dir;
     }
+    if (key === '_missing') {
+      // worst first on the initial click; excluded (unscored) devices always sort last
+      const rank = r => r._completeness == null ? -1
+        : r._missingCritical.length * 1000 + r._missingImportant.length;
+      return (rank(b) - rank(a)) * dir;
+    }
     const av = key.startsWith('_') ? String(a[key] ?? '') : catVal(a, key);
     const bv = key.startsWith('_') ? String(b[key] ?? '') : catVal(b, key);
     return av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' }) * dir;
@@ -773,6 +784,24 @@ function renderTableHead() {
   }).join('');
 }
 
+function missingCellHTML(r) {
+  if (r._completeness == null)
+    return '<td><span class="empty-val" title="Excluded from scoring by status">—</span></td>';
+  const crit = r._missingCritical, imp = r._missingImportant;
+  if (!crit.length && !imp.length)
+    return '<td><span class="ok-val" title="All tiered fields populated">✓ complete</span></td>';
+  const parts = [];
+  const shown = crit.slice(0, 2);
+  for (const f of shown) parts.push(`<span class="mchip m-crit">${esc(f)}</span>`);
+  if (crit.length > shown.length) parts.push(`<span class="mchip m-crit">+${crit.length - shown.length}</span>`);
+  if (imp.length) parts.push(`<span class="mchip m-warn">${imp.length} important</span>`);
+  const title =
+    (crit.length ? `Critical empty: ${crit.join(', ')}` : '') +
+    (crit.length && imp.length ? '\n' : '') +
+    (imp.length ? `Important empty: ${imp.join(', ')}` : '');
+  return `<td class="miss-cell" title="${esc(title)}">${parts.join('')}</td>`;
+}
+
 function renderTableBody() {
   const total = state.tableRows.length;
   const pages = Math.max(1, Math.ceil(total / state.pageSize));
@@ -788,9 +817,18 @@ function renderTableBody() {
         const tone = completenessTone(r._completeness);
         return `<td><span class="pill p-${tone}"><span class="dot"></span>${fmtPct(r._completeness)}</span></td>`;
       }
+      if (c.key === '_missing') return missingCellHTML(r);
       if (c.key === '_gen') return `<td>${r._gen === 'Unspecified' ? '<span class="empty-val">—</span>' : esc(r._gen)}</td>`;
       const v = catVal(r, c.key);
-      return `<td title="${esc(String(r[c.key] ?? ''))}">${v === '(empty)' ? '<span class="empty-val">(empty)</span>' : esc(v)}</td>`;
+      if (v === '(empty)') {
+        const tier = state.settings.tiers[c.key];
+        if (r._completeness != null && tier === 'critical')
+          return `<td class="cell-empty-crit" title="${esc(c.label)} — critical field is empty"><span class="empty-val ev-crit">⚠ empty</span></td>`;
+        if (r._completeness != null && tier === 'important')
+          return `<td title="${esc(c.label)} — important field is empty"><span class="empty-val ev-warn">empty</span></td>`;
+        return `<td><span class="empty-val">—</span></td>`;
+      }
+      return `<td title="${esc(String(r[c.key] ?? ''))}">${esc(v)}</td>`;
     }).join('');
     return `<tr data-idx="${r._idx}">${cells}</tr>`;
   }).join('');
@@ -902,7 +940,26 @@ function updateTierCounts() {
   $('#tierCounts').textContent = `— ${c} critical · ${i} important · ${vals.length - c - i} ignored`;
 }
 
-const settingsRecompute = debounce(() => { recomputeAll(); }, 250);
+const settingsRecompute = debounce(() => { saveSettings(); recomputeAll(); }, 250);
+
+const SETTINGS_STORE_KEY = 'netboxDashboard.settings.v1';
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_STORE_KEY, currentConfigJSON()); }
+  catch { /* storage unavailable (private mode / quota) — settings stay session-only */ }
+}
+
+function loadSavedSettings() {
+  let raw = null;
+  try { raw = localStorage.getItem(SETTINGS_STORE_KEY); } catch { return; }
+  if (!raw) return;
+  try {
+    applyConfigJSON(raw);
+    emptySet = new Set(state.settings.emptyMarkers);
+  } catch {
+    try { localStorage.removeItem(SETTINGS_STORE_KEY); } catch { /* ignore */ }
+  }
+}
 
 function currentConfigJSON() {
   const s = state.settings;
@@ -1145,6 +1202,7 @@ function wireEvents() {
     const msg = $('#cfgMsg');
     try {
       applyConfigJSON($('#cfgPaste').value);
+      saveSettings();
       renderSettingsPanel();
       recomputeAll();
       msg.textContent = '✓ Config applied.';
@@ -1155,6 +1213,7 @@ function wireEvents() {
   $('#btnCfgReset').addEventListener('click', () => {
     state.settings = defaultSettings();
     for (const c of state.fields) if (!(c in state.settings.tiers)) state.settings.tiers[c] = 'ignored';
+    try { localStorage.removeItem(SETTINGS_STORE_KEY); } catch { /* ignore */ }
     renderSettingsPanel();
     recomputeAll();
     $('#cfgMsg').textContent = 'Defaults restored.';
@@ -1166,6 +1225,7 @@ function wireEvents() {
 function init() {
   Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   Chart.defaults.font.size = 11;
+  loadSavedSettings();
   wireEvents();
   renderSettingsPanel();
 }

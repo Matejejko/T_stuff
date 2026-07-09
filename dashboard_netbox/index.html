@@ -205,6 +205,7 @@
           <div id="excludedStatuses" class="checkbox-list"></div>
 
           <h4>Config export / import</h4>
+          <p class="card-note">Settings are saved automatically in this browser and restored on reload. Use export/import to move them to another machine.</p>
           <div class="btn-row">
             <button id="btnCfgDownload" class="btn">Download JSON</button>
             <button id="btnCfgCopy" class="btn">Copy JSON</button>
@@ -218,7 +219,7 @@
         </div>
         <div class="settings-col">
           <h4>Field tiers <span class="muted" id="tierCounts"></span></h4>
-          <p class="card-note">Critical fields score with the critical weight, important with the important weight, ignored fields are excluded from scoring entirely.</p>
+          <p class="card-note">Critical fields score with the critical weight and empty values are flagged red in the device table; important fields score with the important weight and empty values show a muted &ldquo;empty&rdquo; marker; ignored fields are excluded from scoring and their empty values are not marked.</p>
           <div id="tierEditor" class="tier-editor"></div>
         </div>
       </div>

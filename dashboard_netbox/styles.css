@@ -324,6 +324,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 #deviceTable tbody tr { cursor: pointer; }
 #deviceTable tbody tr:hover { background: var(--surface-2); }
 #deviceTable td .empty-val { color: var(--muted); font-style: italic; }
+#deviceTable td .empty-val.ev-crit { color: var(--crit-text); font-weight: 650; }
+#deviceTable td .empty-val.ev-warn { color: var(--warn-text); }
+#deviceTable td.cell-empty-crit { background: var(--danger-soft); }
+#deviceTable td .ok-val { color: var(--good-text); font-size: 12px; }
+#deviceTable td.miss-cell { max-width: 340px; }
+.mchip {
+  display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  margin-right: 4px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-2);
+}
+.mchip.m-crit { border-color: var(--status-crit); color: var(--crit-text); background: var(--danger-soft); }
+.mchip.m-warn { border-color: var(--status-warn); color: var(--warn-text); background: color-mix(in srgb, var(--status-warn) 10%, var(--surface)); }
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 2px 9px; border-radius: 999px; font-weight: 650;
