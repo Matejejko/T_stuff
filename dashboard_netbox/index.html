@@ -83,19 +83,9 @@
 
   <!-- Completeness -->
   <section class="section">
-    <h2 class="section-title">Data completeness</h2>
-
-    <div class="card danger-card" id="oobCallout">
-      <div class="danger-head">
-        <span class="danger-icon">&#9888;</span>
-        <div>
-          <h3>Active devices without out-of-band access</h3>
-          <p class="card-note">Status = Active and BMC IP or OOB IP empty &mdash; no remote path to a live server.</p>
-        </div>
-        <div class="danger-num" id="oobNumber">&ndash;</div>
-      </div>
-      <div class="danger-breakdown" id="oobBreakdown"></div>
-    </div>
+    <h2 class="section-title">Data completeness
+      <span class="lifecycle-badges" id="completenessBadges"></span>
+    </h2>
 
     <div class="chart-grid">
       <div class="card span2">
@@ -127,11 +117,6 @@
         <div class="card-head"><h3>EOL status</h3></div>
         <div id="eolEmpty" class="empty-note hidden"></div>
         <div class="chart-box" id="eolBox"><canvas id="chEol"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>Device age <span class="muted">&mdash; from Installation Date</span></h3></div>
-        <div id="ageEmpty" class="empty-note hidden"></div>
-        <div class="chart-box h240" id="ageBox"><canvas id="chAge"></canvas></div>
       </div>
       <div class="card" id="fwCard">
         <div class="card-head"><h3>Firmware bundle coverage</h3></div>
