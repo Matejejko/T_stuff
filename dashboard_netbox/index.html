@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetBox Fleet Dashboard</title>
+<link rel="stylesheet" href="styles.css">
+<script src="vendor/papaparse.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">▮▮</span>
+    <div>
+      <h1>NetBox Fleet Dashboard</h1>
+      <span class="brand-sub">Device export &middot; completeness &amp; composition</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <span id="fileBadge" class="file-badge hidden"></span>
+    <button id="btnLoadCsv" class="btn btn-primary">Load CSV</button>
+    <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden">
+    <button id="btnSettings" class="btn" title="Scoring &amp; tier settings">&#9881; Settings</button>
+    <button id="btnTheme" class="btn btn-icon" title="Toggle light/dark theme">&#9788;</button>
+  </div>
+</header>
+
+<!-- ============ Empty state / dropzone ============ -->
+<section id="emptyState" class="empty-state">
+  <div id="dropzone" class="dropzone" tabindex="0">
+    <div class="dz-icon">&#8682;</div>
+    <h2>Drop a NetBox device CSV export here</h2>
+    <p>or <button id="btnBrowse" class="linklike">browse for a file</button></p>
+    <p class="dz-note">Everything is parsed in your browser &mdash; no data leaves this page.</p>
+    <p class="dz-note"><button id="btnSample" class="linklike">Load the bundled sample dataset</button> <span class="muted">(synthetic demo data, needs the page served over http)</span></p>
+  </div>
+</section>
+
+<!-- ============ Dashboard ============ -->
+<div id="dashboard" class="hidden">
+
+  <!-- Data health strip: schema warnings + parse errors -->
+  <section id="dataHealth" class="section data-health hidden">
+    <details id="healthDetails">
+      <summary id="healthSummary"></summary>
+      <div id="headerWarnings"></div>
+      <div id="parseErrors"></div>
+    </details>
+  </section>
+
+  <!-- Filter bar -->
+  <section class="section filterbar-wrap">
+    <div class="filterbar" id="filterBar"></div>
+    <div class="filterbar-meta">
+      <span id="filterCount"></span>
+      <button id="btnClearFilters" class="linklike hidden">Clear all filters</button>
+    </div>
+  </section>
+
+  <!-- KPI tiles -->
+  <section class="section">
+    <div class="kpi-grid" id="kpiGrid"></div>
+  </section>
+
+  <!-- Fleet composition -->
+  <section class="section">
+    <h2 class="section-title">Fleet composition</h2>
+    <div class="panel-grid" id="compositionGrid"></div>
+    <div class="card density-card">
+      <div class="card-head">
+        <h3>Density &mdash; top locations by device count</h3>
+        <div class="seg" id="densityToggle">
+          <button data-mode="site" class="active">Sites</button>
+          <button data-mode="rack">Racks</button>
+        </div>
+      </div>
+      <div class="chart-box" id="densityBox"><canvas id="chDensity"></canvas></div>
+      <p class="card-note" id="densityNote"></p>
+    </div>
+  </section>
+
+  <!-- Completeness -->
+  <section class="section">
+    <h2 class="section-title">Data completeness</h2>
+
+    <div class="card danger-card" id="oobCallout">
+      <div class="danger-head">
+        <span class="danger-icon">&#9888;</span>
+        <div>
+          <h3>Active devices without out-of-band access</h3>
+          <p class="card-note">Status = Active and BMC IP or OOB IP empty &mdash; no remote path to a live server.</p>
+        </div>
+        <div class="danger-num" id="oobNumber">&ndash;</div>
+      </div>
+      <div class="danger-breakdown" id="oobBreakdown"></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="card span2">
+        <div class="card-head"><h3>Fill rate by field <span class="muted">&mdash; worst first, ignored fields excluded</span></h3></div>
+        <div class="chart-box" id="fieldFillBox"><canvas id="chFieldFill"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Device completeness distribution</h3></div>
+        <div class="chart-box h240"><canvas id="chHistogram"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Average completeness by role</h3></div>
+        <div class="chart-box" id="byRoleBox"><canvas id="chByRole"></canvas></div>
+      </div>
+      <div class="card span2">
+        <div class="card-head"><h3>Average completeness by site <span class="muted" id="bySiteSub"></span></h3></div>
+        <div class="chart-box" id="bySiteBox"><canvas id="chBySite"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lifecycle / risk -->
+  <section class="section">
+    <h2 class="section-title">Lifecycle &amp; risk
+      <span class="lifecycle-badges" id="lifecycleBadges"></span>
+    </h2>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-head"><h3>EOL status</h3></div>
+        <div id="eolEmpty" class="empty-note hidden"></div>
+        <div class="chart-box" id="eolBox"><canvas id="chEol"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Device age <span class="muted">&mdash; from Installation Date</span></h3></div>
+        <div id="ageEmpty" class="empty-note hidden"></div>
+        <div class="chart-box h240" id="ageBox"><canvas id="chAge"></canvas></div>
+      </div>
+      <div class="card" id="fwCard">
+        <div class="card-head"><h3>Firmware bundle coverage</h3></div>
+        <p class="card-note">Presence only &mdash; the FW Bundle field mixes incompatible formats, so no date is parsed from it.</p>
+        <div id="fwStats"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Device table -->
+  <section class="section">
+    <h2 class="section-title">Devices</h2>
+    <div class="card">
+      <div class="table-toolbar">
+        <input type="search" id="tableSearch" placeholder="Search name, serial, site, type&hellip;">
+        <button id="btnOobOnly" class="chip-toggle" title="Show only Active devices missing BMC IP or OOB IP">&#9888; Missing OOB only</button>
+        <span class="spacer"></span>
+        <span id="tableCount" class="muted"></span>
+        <button id="btnExport" class="btn btn-primary">Export annotated CSV</button>
+      </div>
+      <div class="table-scroll">
+        <table id="deviceTable">
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="table-pager">
+        <button id="pgPrev" class="btn">&larr; Prev</button>
+        <span id="pgInfo"></span>
+        <button id="pgNext" class="btn">Next &rarr;</button>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /dashboard -->
+
+<!-- ============ Device detail modal ============ -->
+<div class="modal-backdrop hidden" id="deviceModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="dmTitle"></h3>
+      <button class="btn btn-icon modal-close" data-close="deviceModal">&times;</button>
+    </div>
+    <div class="modal-body" id="dmBody"></div>
+  </div>
+</div>
+
+<!-- ============ Settings modal ============ -->
+<div class="modal-backdrop hidden" id="settingsModal">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <h3>Scoring &amp; tier settings</h3>
+      <button class="btn btn-icon modal-close" data-close="settingsModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-grid">
+        <div class="settings-col">
+          <h4>Weights</h4>
+          <label class="field-row">Critical field weight
+            <input type="number" id="wCritical" min="0" step="0.5" value="3"></label>
+          <label class="field-row">Important field weight
+            <input type="number" id="wImportant" min="0" step="0.5" value="1"></label>
+          <p class="card-note">Per-device completeness = &Sigma; weights of non-empty tiered fields &divide; &Sigma; weights of all tiered fields.</p>
+
+          <h4>Values treated as empty</h4>
+          <p class="card-note">One per line. A cell that is blank after trimming is always treated as empty.</p>
+          <textarea id="emptyMarkers" rows="8" spellcheck="false"></textarea>
+
+          <h4>Exclude statuses from scoring</h4>
+          <p class="card-note">Devices with these statuses are shown but not scored (e.g. an empty BMC IP on a decommissioned server is not a data-quality problem).</p>
+          <div id="excludedStatuses" class="checkbox-list"></div>
+
+          <h4>Config export / import</h4>
+          <div class="btn-row">
+            <button id="btnCfgDownload" class="btn">Download JSON</button>
+            <button id="btnCfgCopy" class="btn">Copy JSON</button>
+          </div>
+          <textarea id="cfgPaste" rows="4" placeholder="Paste a previously exported config JSON here&hellip;" spellcheck="false"></textarea>
+          <div class="btn-row">
+            <button id="btnCfgApply" class="btn btn-primary">Apply pasted config</button>
+            <button id="btnCfgReset" class="btn">Reset to defaults</button>
+          </div>
+          <p id="cfgMsg" class="card-note"></p>
+        </div>
+        <div class="settings-col">
+          <h4>Field tiers <span class="muted" id="tierCounts"></span></h4>
+          <p class="card-note">Critical fields score with the critical weight, important with the important weight, ignored fields are excluded from scoring entirely.</p>
+          <div id="tierEditor" class="tier-editor"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
