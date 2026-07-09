@@ -28,8 +28,12 @@ devices + 2 deliberately malformed rows) generated for testing.
   tiered fields ÷ Σ weights of all tiered fields. Defaults: 14 critical
   fields × weight 3, 11 important × weight 1, everything else ignored.
   Tiers, weights, empty-value markers, and status exclusions are all editable
-  in **Settings** and exportable/importable as JSON (state is in-memory only —
-  download the config JSON to keep it across sessions).
+  in **Settings**, saved automatically in the browser (localStorage) and
+  restored on reload, and exportable/importable as JSON to move them between
+  machines. Tiers also drive how empties are shown in the device table:
+  an empty **critical** field is flagged red, an empty **important** field
+  shows a muted "empty" marker, and empty **ignored** fields are not marked
+  at all.
 - **Fleet composition** — dynamic breakdowns (no hardcoded enums) for
   Manufacturer, Role, Status, Region, Criticality, Tenant, plus
   **Generation (parsed from Type)** — extracted from a trailing
@@ -45,7 +49,9 @@ devices + 2 deliberately malformed rows) generated for testing.
 - **Filters** — Site, Region, Criticality, Status, Role, Manufacturer,
   Generation, Tenant; every chart, KPI, and the table respect the same filter
   set. Debounced; handles a few thousand rows comfortably.
-- **Device table** — sortable, searchable, paginated; click a row for the full
+- **Device table** — sortable, searchable, paginated; a **Missing** column
+  lists each device's empty critical fields as red chips (plus an important-
+  field count), and empty cells are styled by tier. Click a row for the full
   field-by-field view grouped by tier with empties highlighted. Export the
   current view as CSV annotated with score + missing critical/important fields.
 
