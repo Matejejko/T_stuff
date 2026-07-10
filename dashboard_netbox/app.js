@@ -100,6 +100,7 @@ const state = {
   page: 0,
   pageSize: 50,
   densityMode: 'site',
+  selectedIdx: null,     // _idx of the last-opened device row; kept highlighted until another row is clicked
 };
 
 let emptySet = new Set(DEFAULT_EMPTY_MARKERS);
@@ -231,7 +232,7 @@ function ingest(res, name) {
         ? catVal(res.data[e.row], 'Name') : catVal(res.data[e.row], 'Asset Name')) : '?',
     }));
 
-  Object.assign(state, { filters: {}, search: '', oobOnly: false, page: 0, sort: { key: '_completeness', dir: 1 } });
+  Object.assign(state, { filters: {}, search: '', oobOnly: false, page: 0, sort: { key: '_completeness', dir: 1 }, selectedIdx: null });
   $('#tableSearch').value = '';
   $('#btnOobOnly').classList.remove('active');
 
@@ -786,7 +787,7 @@ function renderTableBody() {
       }
       return `<td title="${esc(String(r[c.key] ?? ''))}">${esc(v)}</td>`;
     }).join('');
-    return `<tr data-idx="${r._idx}">${cells}</tr>`;
+    return `<tr data-idx="${r._idx}"${r._idx === state.selectedIdx ? ' class="row-selected"' : ''}>${cells}</tr>`;
   }).join('');
 
   $('#pgInfo').textContent = total
@@ -802,9 +803,18 @@ function renderTableBody() {
 }
 
 /* ---------- Device detail modal ---------- */
+function markSelectedRow() {
+  $$('#tableBody tr.row-selected').forEach(tr => tr.classList.remove('row-selected'));
+  if (state.selectedIdx == null) return;
+  const tr = $(`#tableBody tr[data-idx="${state.selectedIdx}"]`);
+  if (tr) tr.classList.add('row-selected');
+}
+
 function openDeviceModal(idx) {
   const r = state.rows[idx];
   if (!r) return;
+  state.selectedIdx = idx;
+  markSelectedRow();
   const name = catVal(r, 'Name') !== '(empty)' ? catVal(r, 'Name')
     : (catVal(r, 'Asset Name') !== '(empty)' ? catVal(r, 'Asset Name') : `Row ${idx + 1}`);
   $('#dmTitle').textContent = name;

@@ -53,7 +53,10 @@ devices + 2 deliberately malformed rows) generated for testing.
 - **Device table** — sortable, searchable, paginated; a **Missing** column
   lists each device's empty critical fields as red chips (plus an important-
   field count), and empty cells are styled by tier. Click a row for the full
-  field-by-field view grouped by tier with empties highlighted. Export the
+  field-by-field view grouped by tier with empties highlighted; the clicked
+  row stays marked in magenta (even after the detail view is closed, across
+  sorting and paging) so you never lose your place while working down the
+  list — the mark moves when you click the next device. Export the
   current view as CSV annotated with score + missing critical/important fields.
 
 ## Decisions taken (edit in Settings if wrong for your instance)

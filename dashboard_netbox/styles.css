@@ -308,6 +308,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 #deviceTable td:first-child { color: var(--text); font-weight: 550; }
 #deviceTable tbody tr { cursor: pointer; }
 #deviceTable tbody tr:hover { background: var(--surface-2); }
+#deviceTable tbody tr.row-selected,
+#deviceTable tbody tr.row-selected:hover { background: var(--accent-soft); }
+#deviceTable tbody tr.row-selected td { border-bottom-color: color-mix(in srgb, var(--accent) 40%, var(--grid)); }
+#deviceTable tbody tr.row-selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--accent);
+}
 #deviceTable td .empty-val { color: var(--muted); font-style: italic; }
 #deviceTable td .empty-val.ev-crit { color: var(--crit-text); font-weight: 650; }
 #deviceTable td .empty-val.ev-warn { color: var(--warn-text); }
