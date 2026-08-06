@@ -1,0 +1,61 @@
+
+===DEVACC:HOST===
+ffm1-oob-leaf3
+
+===DEVACC:SYSEEPROM===
+--------------------------------------------------------
+Attribute                Value/State
+--------------------------------------------------------
+Base Mac Address         :74:86:e2:99:29:a5
+Crc 32                   :0x025C4258
+Platform                 :X86_64-dellemc_s5224f_c3538-r0
+Device Version           :1
+Diag Version             :3.40.4.1-9
+Hardware Version         :A02
+Product Name             :S5224F-ON
+Location                 :Slot 1
+Mac Addresses            :128
+Manufacture Country      :TH
+Mfg Date                 :2022-11-07
+Mfg Name                 :CET00
+Onie Version             :3.40.1.1-9
+Part Number              :0DCXH8
+Serial Number            :TH0DCXH8CET002B43G76
+Service Tag              :29R4SR3
+Vendor Ext               :0x00 0x00 0x02 0xA2
+Vendor Name              :Dell EMC
+
+===DEVACC:FIRMWARE===
+------------------------------------------------------------------------------------------------------------
+Chassis        Module         Component           Version        Description
+------------------------------------------------------------------------------------------------------------
+S5224F-ON      N/A            BIOS                3.40.0.9-17    Performs initialization of hardware...
+                              BMC                 1.08           Platform management controller for...
+                              FPGA                2.65           Used for managing the system LEDs
+                              PCIe                2.6            ASIC PCIe firmware
+                              Secondary CPLD 1    1.0            Used for managing SFP28/QSFP28 port...
+                              System CPLD         0.9            Used for managing the CPU power sequence...
+
+===DEVACC:UPDATELOG===
+2020-02-11 16:04:21 ONIE: Success: Firmware update URL: file:///lib/onie/onie-updater
+2020-02-11 16:04:21 ONIE: Success: Firmware update version: 3.40.1.1-6
+2021-07-29 08:26:32 ONIE: Success: Firmware update URL: file:///lib/onie/onie-updater
+2021-07-29 08:26:32 ONIE: Success: Firmware update version: 3.40.1.1-7
+2025-02-06 15:16:58 ONIE FW updater version matches with running ONIE 3.40.1.1-9
+2025-02-06 15:16:58 FPGA version mis-match between packed and running.
+2025-02-06 15:22:49 FPGA update complete. No errors detected.
+2025-02-06 15:22:50 FPGA Boot Region is from 0x400000
+2025-02-06 15:22:50 BIOS version mis-match between running and packed
+2025-02-06 15:22:55 Programming BIOS flash: S5200-BIOS-3.40.0.9-17-32M.bin ...
+2025-02-06 15:24:30 BIOS update/verified ok
+2025-02-06 15:24:30 BIOS update complete. No errors detected.
+2025-02-06 15:24:30 CPU CPLD minor rev mis-match between packed and running.
+2025-02-06 15:24:56 CPU CPLD updated ok
+2025-02-06 15:24:56 SECONDARY CPLD update is not required.
+2025-02-06 15:24:56 BMC version mis-match between running and packed
+2025-02-06 15:33:49 BMC update complete. No errors detected.
+2025-02-06 15:33:49 ONIE FW updater write sys_eeprom...
+2025-02-06 15:33:55 ONIE: Success: Firmware update URL: /mnt/onie-boot/onie/update/pending/onie-update-full-x86_64-dellemc_s5200_c3538-r0.3.40.5.1-26.bin
+2025-02-06 15:33:55 ONIE: Success: Firmware update version: 3.40.5.1-26
+
+===DEVACC:END===
