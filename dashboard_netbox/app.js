@@ -39,6 +39,14 @@ const FILTER_DIMS = [
   { key: 'Tenant',       label: 'Tenant',       get: r => catVal(r, 'Tenant') },
 ];
 
+/* Filters that live in the device-table card and narrow the table only
+ * (they stack on top of the section filters above, like search does). */
+const TABLE_FILTER_DIMS = [
+  { key: 'Status', label: 'Status', get: r => catVal(r, 'Status') },
+  { key: 'Role',   label: 'Role',   get: r => catVal(r, 'Role') },
+  { key: 'Type',   label: 'Type',   get: r => catVal(r, 'Type') },
+];
+
 const BREAKDOWN_PANELS = [
   { title: 'Manufacturer', get: r => catVal(r, 'Manufacturer') },
   { title: 'Role',         get: r => catVal(r, 'Role') },
@@ -92,6 +100,7 @@ const state = {
   settings: defaultSettings(),
   scoreDenominator: 0,
   filters: {},           // dim key -> Set of selected values (absent/empty = all)
+  tableFilters: {},      // same shape, applied to the device table only
   filtered: [],
   tableRows: [],
   sort: { key: '_completeness', dir: 1 },
@@ -232,7 +241,7 @@ function ingest(res, name) {
         ? catVal(res.data[e.row], 'Name') : catVal(res.data[e.row], 'Asset Name')) : '?',
     }));
 
-  Object.assign(state, { filters: {}, search: '', oobOnly: false, page: 0, sort: { key: '_completeness', dir: 1 }, selectedIdx: null });
+  Object.assign(state, { filters: {}, tableFilters: {}, search: '', oobOnly: false, page: 0, sort: { key: '_completeness', dir: 1 }, selectedIdx: null });
   $('#tableSearch').value = '';
   $('#btnOobOnly').classList.remove('active');
 
@@ -300,86 +309,102 @@ function applyFilters() {
 
 const onFilterChange = debounce(() => { applyFilters(); renderAll(); }, 150);
 
+/* Multi-select dropdown pill. `values` is [[value, count], …] in display order;
+ * `getSel` reads the live selection, `setSel` replaces it, `onChange` re-renders. */
+function buildFilterDropdown({ label, note, values, getSel, setSel, onChange }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'fdrop';
+  const btn = document.createElement('button');
+  btn.className = 'fdrop-btn';
+  btn.type = 'button';
+  if (note) btn.title = note;
+  wrap.appendChild(btn);
+
+  const menu = document.createElement('div');
+  menu.className = 'fdrop-menu hidden';
+  menu.innerHTML = `
+    ${note ? `<p class="card-note" style="margin:0 0 6px">${note}</p>` : ''}
+    <input type="search" placeholder="Filter values…" aria-label="Filter ${esc(label)} values">
+    <div class="fdrop-list"></div>
+    <div class="fdrop-foot">
+      <button type="button" class="linklike" data-act="all">Select all</button>
+      <button type="button" class="linklike" data-act="none">Clear</button>
+    </div>`;
+  wrap.appendChild(menu);
+
+  const list = menu.querySelector('.fdrop-list');
+  const renderList = (q = '') => {
+    const sel = getSel();
+    list.innerHTML = values
+      .filter(([v]) => !q || v.toLowerCase().includes(q))
+      .map(([v, n]) => `
+        <label><input type="checkbox" value="${esc(v)}" ${sel.has(v) ? 'checked' : ''}>
+          <span class="${v === '(empty)' ? 'empty-val muted' : ''}">${esc(v)}</span>
+          <span class="vcount">${fmtInt(n)}</span></label>`).join('');
+  };
+  const refreshBtn = () => {
+    const n = getSel().size;
+    btn.innerHTML = n
+      ? `${esc(label)} <span class="count">· ${n}</span> ▾`
+      : `${esc(label)} ▾`;
+    btn.classList.toggle('active', n > 0);
+  };
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = !menu.classList.contains('hidden');
+    closeAllMenus();
+    if (!wasOpen) { renderList(); menu.classList.remove('hidden'); menu.querySelector('input').focus(); }
+  });
+  menu.addEventListener('click', e => e.stopPropagation());
+  menu.querySelector('input').addEventListener('input', e => renderList(e.target.value.toLowerCase()));
+  list.addEventListener('change', e => {
+    const sel = new Set(getSel());
+    e.target.checked ? sel.add(e.target.value) : sel.delete(e.target.value);
+    setSel(sel);
+    refreshBtn();
+    onChange();
+  });
+  menu.querySelector('.fdrop-foot').addEventListener('click', e => {
+    const act = e.target.dataset.act;
+    if (!act) return;
+    setSel(act === 'all' ? new Set(values.map(([v]) => v)) : new Set());
+    renderList(menu.querySelector('input').value.toLowerCase());
+    refreshBtn();
+    onChange();
+  });
+
+  refreshBtn();
+  return wrap;
+}
+
+function countValues(rows, get) {
+  const counts = new Map();
+  for (const r of rows) {
+    const v = get(r);
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  return counts;
+}
+const byCountThenName = (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]);
+
 function renderFilterBar() {
   const bar = $('#filterBar');
   bar.innerHTML = '';
   for (const dim of FILTER_DIMS) {
+    const counts = countValues(state.rows, dim.get);
     // prune selections whose value no longer exists
-    const counts = new Map();
-    for (const r of state.rows) {
-      const v = dim.get(r);
-      counts.set(v, (counts.get(v) || 0) + 1);
-    }
     if (state.filters[dim.key]) {
       for (const v of [...state.filters[dim.key]]) if (!counts.has(v)) state.filters[dim.key].delete(v);
     }
-    const values = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-
-    const wrap = document.createElement('div');
-    wrap.className = 'fdrop';
-    const btn = document.createElement('button');
-    btn.className = 'fdrop-btn';
-    btn.type = 'button';
-    if (dim.note) btn.title = dim.note;
-    wrap.appendChild(btn);
-
-    const menu = document.createElement('div');
-    menu.className = 'fdrop-menu hidden';
-    menu.innerHTML = `
-      ${dim.note ? `<p class="card-note" style="margin:0 0 6px">${dim.note}</p>` : ''}
-      <input type="search" placeholder="Filter values…" aria-label="Filter ${esc(dim.label)} values">
-      <div class="fdrop-list"></div>
-      <div class="fdrop-foot">
-        <button type="button" class="linklike" data-act="all">Select all</button>
-        <button type="button" class="linklike" data-act="none">Clear</button>
-      </div>`;
-    wrap.appendChild(menu);
-
-    const list = menu.querySelector('.fdrop-list');
-    const renderList = (q = '') => {
-      const sel = state.filters[dim.key] || new Set();
-      list.innerHTML = values
-        .filter(([v]) => !q || v.toLowerCase().includes(q))
-        .map(([v, n]) => `
-          <label><input type="checkbox" value="${esc(v)}" ${sel.has(v) ? 'checked' : ''}>
-            <span class="${v === '(empty)' ? 'empty-val muted' : ''}">${esc(v)}</span>
-            <span class="vcount">${fmtInt(n)}</span></label>`).join('');
-    };
-    const refreshBtn = () => {
-      const n = state.filters[dim.key]?.size || 0;
-      btn.innerHTML = n
-        ? `${esc(dim.label)} <span class="count">· ${n}</span> ▾`
-        : `${esc(dim.label)} ▾`;
-      btn.classList.toggle('active', n > 0);
-      updateFilterMeta();
-    };
-
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const wasOpen = !menu.classList.contains('hidden');
-      closeAllMenus();
-      if (!wasOpen) { renderList(); menu.classList.remove('hidden'); menu.querySelector('input').focus(); }
-    });
-    menu.addEventListener('click', e => e.stopPropagation());
-    menu.querySelector('input').addEventListener('input', e => renderList(e.target.value.toLowerCase()));
-    list.addEventListener('change', e => {
-      const v = e.target.value;
-      if (!state.filters[dim.key]) state.filters[dim.key] = new Set();
-      e.target.checked ? state.filters[dim.key].add(v) : state.filters[dim.key].delete(v);
-      refreshBtn();
-      onFilterChange();
-    });
-    menu.querySelector('.fdrop-foot').addEventListener('click', e => {
-      const act = e.target.dataset.act;
-      if (!act) return;
-      state.filters[dim.key] = act === 'all' ? new Set(values.map(([v]) => v)) : new Set();
-      renderList(menu.querySelector('input').value.toLowerCase());
-      refreshBtn();
-      onFilterChange();
-    });
-
-    refreshBtn();
-    bar.appendChild(wrap);
+    bar.appendChild(buildFilterDropdown({
+      label: dim.label,
+      note: dim.note,
+      values: [...counts.entries()].sort(byCountThenName),
+      getSel: () => state.filters[dim.key] || new Set(),
+      setSel: s => { state.filters[dim.key] = s; },
+      onChange: () => { updateFilterMeta(); onFilterChange(); },
+    }));
   }
   updateFilterMeta();
 }
@@ -699,8 +724,41 @@ function renderDataHealth() {
 }
 
 /* ---------- Device table ---------- */
+function anyTableFilterActive() { return TABLE_FILTER_DIMS.some(d => state.tableFilters[d.key]?.size); }
+
+function renderTableFilterBar() {
+  const bar = $('#tableFilterBar');
+  bar.innerHTML = '';
+  for (const dim of TABLE_FILTER_DIMS) {
+    // counts reflect the rows reaching the table, i.e. after the section filters above
+    const counts = countValues(state.filtered, dim.get);
+    // keep a selected value visible (as 0) if the filters above have excluded it,
+    // so an empty table is never caused by a checkbox the user can't see
+    for (const v of state.tableFilters[dim.key] || []) if (!counts.has(v)) counts.set(v, 0);
+    bar.appendChild(buildFilterDropdown({
+      label: dim.label,
+      values: [...counts.entries()].sort(byCountThenName),
+      getSel: () => state.tableFilters[dim.key] || new Set(),
+      setSel: s => { state.tableFilters[dim.key] = s; },
+      onChange: () => {
+        state.page = 0;
+        computeTableRows();
+        renderTableBody();
+        updateTableFilterMeta();
+      },
+    }));
+  }
+  updateTableFilterMeta();
+}
+
+function updateTableFilterMeta() {
+  $('#btnClearTableFilters').classList.toggle('hidden', !anyTableFilterActive());
+}
+
 function computeTableRows() {
   let rows = state.filtered;
+  const tf = TABLE_FILTER_DIMS.filter(d => state.tableFilters[d.key]?.size);
+  if (tf.length) rows = rows.filter(r => tf.every(d => state.tableFilters[d.key].has(d.get(r))));
   if (state.oobOnly) rows = rows.filter(r => r._oobGap);
   if (state.search) {
     const q = state.search.toLowerCase();
@@ -729,6 +787,7 @@ function computeTableRows() {
 }
 
 function renderTableFull() {
+  renderTableFilterBar();
   computeTableRows();
   renderTableHead();
   renderTableBody();
@@ -797,6 +856,7 @@ function renderTableBody() {
   $('#pgNext').disabled = state.page >= pages - 1;
 
   const extras = [];
+  if (anyTableFilterActive()) extras.push('table filters');
   if (state.search) extras.push('search');
   if (state.oobOnly) extras.push('missing-OOB toggle');
   $('#tableCount').textContent = extras.length ? `${fmtInt(total)} rows after ${extras.join(' + ')}` : '';
@@ -1087,6 +1147,13 @@ function wireEvents() {
     computeTableRows();
     renderTableBody();
   }, 250));
+  $('#btnClearTableFilters').addEventListener('click', () => {
+    state.tableFilters = {};
+    state.page = 0;
+    renderTableFilterBar();
+    computeTableRows();
+    renderTableBody();
+  });
   $('#btnOobOnly').addEventListener('click', () => {
     state.oobOnly = !state.oobOnly;
     $('#btnOobOnly').classList.toggle('active', state.oobOnly);
