@@ -42,6 +42,7 @@ RECONFIGURE=0
 SAVE=0
 FORMAT="text"         # text | json
 RAW=0                 # print the untouched remote output instead of parsing
+STREAM=0              # also show the raw remote output live while it arrives
 PARSE_FILE=""         # parse a saved capture instead of connecting
 SAVE_RAW_DIR=""       # also keep each device's raw capture here
 LAST_PARSE_OK=1       # set by report_device: did anything parse at all
@@ -62,6 +63,7 @@ Options:
   -a, --admin USER     account to switch to on the device (default: $ADMIN_USER)
       --json           JSON output instead of the plain report
       --raw            print the raw remote output, parse nothing
+      --stream         show the device output live as it arrives, then report
       --save-raw DIR   also write each device's raw output to DIR/<device>.txt
       --parse-file F   parse a previously saved raw capture, no connection
   -n, --dry-run        print the ssh command that would run, then stop
@@ -91,6 +93,7 @@ while (( $# > 0 )); do
     --parse-file)     [[ -n "${2:-}" ]] || die "Option $1 requires a value."; PARSE_FILE="$2";    shift 2 ;;
     --json)           FORMAT="json"; shift ;;
     --raw)            RAW=1; shift ;;
+    --stream)         STREAM=1; shift ;;
     --save)           SAVE=1; shift ;;
     -R|--reconfigure) RECONFIGURE=1; shift ;;
     -n|--dry-run)     DRY_RUN=1; shift ;;
@@ -402,9 +405,15 @@ for DEVICE in "${DEVICES[@]}"; do
   info "Collecting from $DEVICE via $JUMP ..."
   CAPTURE="$TMPDIR_RUN/$DEVICE.txt"
   RC=0
-  # -t so sudo can prompt for a password if the account needs one; the pty
-  # turns line endings into CRLF, which the parsers strip.
-  ssh -t "$JUMP" -- "$REMOTE_SSH" > "$CAPTURE" 2>"$TMPDIR_RUN/$DEVICE.err" || RC=$?
+  # -t gives the jump host a pty, which merges the device's stderr into this
+  # one stream: an error from sudo or sonic-cli lands in the capture rather
+  # than vanishing. The pty also turns line endings into CRLF, stripped below.
+  # With --stream the same bytes go to the terminal as they arrive.
+  if (( STREAM )); then
+    ssh -t "$JUMP" -- "$REMOTE_SSH" 2>"$TMPDIR_RUN/$DEVICE.err" | tee "$CAPTURE" || RC=$?
+  else
+    ssh -t "$JUMP" -- "$REMOTE_SSH" > "$CAPTURE" 2>"$TMPDIR_RUN/$DEVICE.err" || RC=$?
+  fi
   tr -d '\r' < "$CAPTURE" > "$CAPTURE.clean" && mv "$CAPTURE.clean" "$CAPTURE"
 
   if [[ -n "$SAVE_RAW_DIR" ]]; then
@@ -415,7 +424,18 @@ for DEVICE in "${DEVICES[@]}"; do
   if ! grep -q '^===DEVACC:END===' "$CAPTURE"; then
     warn "$DEVICE: the remote script did not finish (ssh exit $RC)."
     [[ -s "$TMPDIR_RUN/$DEVICE.err" ]] && sed 's/^/          /' "$TMPDIR_RUN/$DEVICE.err" >&2
-    warn "Run again with --raw to see exactly what came back."
+    # Whatever the device managed to say is the actual diagnosis — show it
+    # instead of making the reader re-run with --raw to find out.
+    if [[ -s "$CAPTURE" ]] && (( ! STREAM )); then
+      warn "Last lines from $DEVICE:"
+      tail -n 15 "$CAPTURE" | sed 's/^/          /' >&2
+    fi
+    if grep -qE 'no tty present|a password is required|not in the sudoers' "$CAPTURE"; then
+      warn "That is sudo asking for a password. The device gets no pty here (the"
+      warn "inner ssh carries a command), so sudo cannot prompt and fails instead."
+      warn "Either give '$SSH_USER' NOPASSWD for su on the device, or collect by"
+      warn "hand: ./connect.sh $DEVICE"
+    fi
     FAILED=1
     continue
   fi

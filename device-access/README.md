@@ -149,12 +149,42 @@ Everything `connect.sh` takes (`-u`, `-i`, `--save`, `-R`, `-j`, `-n`), plus:
 | `-a, --admin USER` | account to switch to on the device (default `admin`) |
 | `--json` | JSON array instead of the plain report |
 | `--raw` | print the untouched remote output, parse nothing |
+| `--stream` | show the device output live as it arrives, then the report |
 | `--save-raw DIR` | also write each device's raw output to `DIR/<device>.txt` |
 | `--parse-file F` | parse a saved capture, no connection at all |
 
 Exit status is non-zero if any device failed to connect, did not finish, or
 came back with none of the expected output — so a scripted run cannot silently
 look successful.
+
+### Where the output goes
+
+The report goes to **stdout, i.e. your terminal** — nothing is written to disk
+unless you ask for it with `--save-raw`. Progress and warnings go to stderr, so
+`./collect.sh dev > inventory.txt` captures the report and still shows you what
+is happening.
+
+While a device is being read, its output is buffered rather than echoed,
+because the parsers need the whole thing before they can report. `--stream`
+turns that echo on: the raw device output scrolls past live, then the parsed
+report follows.
+
+### If sudo wants a password
+
+The device gets no pty (the inner ssh carries a command), so `sudo` cannot
+prompt — it fails immediately instead of hanging, and the script prints the
+reason and what to do about it:
+
+```
+[WARN] ffm1-oob-leaf3: the remote script did not finish (ssh exit 1).
+[WARN] Last lines from ffm1-oob-leaf3:
+          sudo: no tty present and no askpass program specified
+[WARN] That is sudo asking for a password. ...
+```
+
+Give the login account NOPASSWD for `su` on the device, or collect that one by
+hand with `connect.sh`. Interactive `connect.sh` is unaffected — it gets a pty
+and sudo prompts normally.
 
 ### Debugging a device that reports oddly
 
