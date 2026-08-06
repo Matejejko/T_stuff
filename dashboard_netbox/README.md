@@ -50,6 +50,15 @@ devices + 2 deliberately malformed rows) generated for testing.
 - **Filters** — Site, Region, Criticality, Status, Role, Manufacturer,
   Generation, Tenant; every chart, KPI, and the table respect the same filter
   set. Debounced; handles a few thousand rows comfortably.
+- **Device table filters** — Status, Role and Type dropdowns in the devices
+  card itself. Multi-select within one dropdown is OR (Active *or* Offline),
+  across dropdowns it is AND (Active *and* network *and* a given type), and
+  they stack on top of the section filters, the search box and the missing-OOB
+  toggle. They narrow the table and the CSV export only — the charts above
+  keep following the section filters at the top of the page. Value counts are
+  taken from the section-filtered set and, like the top filter bar, are not
+  conditioned on the other table filters, so the row count after combining can
+  be lower than the count shown next to a value.
 - **Device table** — sortable, searchable, paginated; a **Missing** column
   lists each device's empty critical fields as red chips (plus an important-
   field count), and empty cells are styled by tier. Click a row for the full

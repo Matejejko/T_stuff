@@ -137,6 +137,11 @@
         <span id="tableCount" class="muted"></span>
         <button id="btnExport" class="btn btn-primary">Export annotated CSV</button>
       </div>
+      <div class="table-filterbar">
+        <span class="tfb-label" title="These narrow this table (and the CSV export) only — the charts above keep using the section filters at the top of the page.">Filter table</span>
+        <div class="filterbar" id="tableFilterBar"></div>
+        <button id="btnClearTableFilters" class="linklike hidden">Clear table filters</button>
+      </div>
       <div class="table-scroll">
         <table id="deviceTable">
           <thead><tr id="tableHead"></tr></thead>

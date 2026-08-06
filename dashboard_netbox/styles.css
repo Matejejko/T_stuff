@@ -212,7 +212,10 @@ body.dragover-page .dropzone { border-color: var(--accent); }
   padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px;
 }
 .fdrop-list label:hover { background: var(--surface-2); }
-.fdrop-list .vcount { margin-left: auto; color: var(--muted); font-size: 11px; }
+/* long values (device types especially) ellipsize instead of widening the menu */
+.fdrop-list label > span:not(.vcount) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fdrop-list label > input { flex: none; }
+.fdrop-list .vcount { margin-left: auto; color: var(--muted); font-size: 11px; flex: none; }
 .fdrop-foot { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .fdrop-foot button { font-size: 11.5px; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
@@ -290,6 +293,16 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer;
 }
 .chip-toggle.active { background: var(--danger-soft); border-color: var(--status-crit); color: var(--crit-text); }
+.table-filterbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 11px; margin-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.table-filterbar .tfb-label {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); cursor: help;
+}
+.table-filterbar .filterbar { flex: 1 1 auto; }
+.table-filterbar .linklike { font-size: 12px; flex: none; }
 .table-scroll { overflow-x: auto; }
 #deviceTable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 #deviceTable th {
